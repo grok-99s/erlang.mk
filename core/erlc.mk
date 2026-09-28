@@ -43,11 +43,9 @@ xyrl_verbose_2 = set -x;
 xyrl_verbose = $(xyrl_verbose_$(V))
 xyrl_verbose_all = $(xyrl_verbose_all_$(V))
 
-asn1_verbose_0 = @echo " ASN1  " $(filter %.asn1,$(?F));
-asn1_verbose_all_0 = @echo " ASN1  " $(notdir $(ASN1_FILES));
+asn1_verbose_0 = @echo " ASN1  " $(notdir $1);
 asn1_verbose_2 = set -x;
 asn1_verbose = $(asn1_verbose_$(V))
-asn1_verbose_all = $(asn1_verbose_all_$(V))
 
 mib_verbose_0 = @echo " MIB   " $(filter %.bin %.mib,$(?F));
 mib_verbose_all_0 = @echo " MIB   " $(notdir $(MIB_FILES));
@@ -108,14 +106,14 @@ ERL_FILES += $(addprefix src/,$(patsubst %.asn1,%.erl,$(notdir $(ASN1_FILES))))
 
 define compile_asn1
 	$(verbose) mkdir -p include/
-	$(verbose) erlc -v -I include/ -o asn1/ +noobj $(ERLC_ASN1_OPTS) $1
+	$(asn1_verbose) erlc -v -I include/ -o asn1/ +noobj $(ERLC_ASN1_OPTS) $1
 	$(verbose) mv asn1/*.erl src/
 	-$(verbose) mv asn1/*.hrl include/
 	$(verbose) mv asn1/*.asn1db include/
 endef
 
 $(PROJECT).d:: $(ASN1_FILES) $(erlc_makefile_change)
-	$(if $(filter $(erlc_makefile_change),$?),$(if $(strip $(ASN1_FILES)),$(asn1_verbose_all) $(call compile_asn1,$(ASN1_FILES))),$(if $(strip $(filter %.asn1,$?)),$(asn1_verbose) $(call compile_asn1,$(filter %.asn1,$?))))
+	$(if $(filter $(erlc_makefile_change),$?),$(if $(strip $(ASN1_FILES)),$(call compile_asn1,$(ASN1_FILES))),$(if $(strip $(filter %.asn1,$?)),$(call compile_asn1,$(filter %.asn1,$?))))
 endif
 
 # SNMP MIB files.
