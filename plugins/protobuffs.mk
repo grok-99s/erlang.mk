@@ -41,9 +41,9 @@ endef
 endif
 
 ifneq ($(PROTO_FILES),)
-$(PROJECT).d:: $(PROTO_FILES) $(erlc_makefile_change)
+$(PROJECT).d:: $(PROTO_FILES) $(MAKEFILE_CHANGE)
 	$(verbose) mkdir -p ebin/ include/
-	$(if $(filter $(erlc_makefile_change),$?),\
+	$(if $(filter $(MAKEFILE_CHANGE),$?),\
 		$(proto_verbose_all) $(call erlang,$(call compile_proto.erl,$(PROTO_FILES))),\
 		$(if $(strip $(filter %.proto,$?)),$(proto_verbose) $(call erlang,$(call compile_proto.erl,$(filter %.proto,$?)))))
 endif
