@@ -309,22 +309,6 @@ define compile_erl
 		-pa ebin/ -I include/ $(filter-out $(ERLC_EXCLUDE_PATHS),$(COMPILE_FIRST_PATHS) $1)
 endef
 
-# Chunked so a Makefile-change rebuild cannot exceed ARG_MAX.
-define compile_erl_chunk
-	@echo " ERLC  " $(notdir $(1));
-	$(verbose) erlc -v $(if $(IS_DEP),$(filter-out -Werror,$(ERLC_OPTS)),$(ERLC_OPTS)) -o ebin/ \
-		-pa ebin/ -I include/ $(1)
-
-endef
-
-define compile_erl_chunks
-$(if $(strip $(1)),$(call compile_erl_chunk,$(wordlist 1,20,$(1)))$(call compile_erl_chunks,$(wordlist 21,10000000,$(1))))
-endef
-
-define compile_all_erl_mk
-$(call compile_erl_chunks,$(filter $(COMPILE_FIRST_PATHS),$(filter-out $(ERLC_EXCLUDE_PATHS),$(ERL_FILES) $(CORE_FILES))))$(call compile_erl_chunks,$(filter-out $(ERLC_EXCLUDE_PATHS) $(COMPILE_FIRST_PATHS),$(ERL_FILES) $(CORE_FILES)))
-endef
-
 define validate_app_file
 	case file:consult("ebin/$(PROJECT).app") of
 		{ok, _} -> halt();
@@ -334,8 +318,8 @@ endef
 
 ebin/$(PROJECT).app:: $(ERL_FILES) $(CORE_FILES) $(wildcard src/$(PROJECT).app.src) $(EX_FILES) $(erlc_makefile_change)
 	$(eval FILES_TO_COMPILE := $(filter-out $(EX_FILES) src/$(PROJECT).app.src,$?))
-	$(if $(filter $(erlc_makefile_change),$?),$(call compile_all_erl_mk),$(if $(strip $(FILES_TO_COMPILE)),$(call compile_erl,$(FILES_TO_COMPILE))))
-	$(if $(filter $(ELIXIR),disable),,$(if $(filter $(erlc_makefile_change),$?),$(foreach f,$(EX_FILES),$(eval MODULES += $(shell $(call erlang,$(call compile_ex.erl,$f))))),$(if $(filter $?,$(EX_FILES)),$(elixirc_verbose) $(eval MODULES := $(shell $(call erlang,$(call compile_ex.erl,$(EX_FILES))))))))
+	$(if $(filter $(erlc_makefile_change),$?),$(call compile_erl,$(filter-out $(EX_FILES) src/$(PROJECT).app.src,$(ERL_FILES) $(CORE_FILES))),$(if $(strip $(FILES_TO_COMPILE)),$(call compile_erl,$(FILES_TO_COMPILE))))
+	$(if $(filter $(ELIXIR),disable),,$(if $(filter $(erlc_makefile_change),$?),$(if $(strip $(EX_FILES)),$(elixirc_verbose) $(eval MODULES := $(shell $(call erlang,$(call compile_ex.erl,$(EX_FILES)))))),$(if $(filter $?,$(EX_FILES)),$(elixirc_verbose) $(eval MODULES := $(shell $(call erlang,$(call compile_ex.erl,$(EX_FILES))))))))
 	$(eval ELIXIR_COMP_FAILED := $(if $(filter _ERROR_,$(firstword $(MODULES))),true,false))
 # Older git versions do not have the --first-parent flag. Do without in that case.
 	$(verbose) if $(ELIXIR_COMP_FAILED); then exit 1; fi
@@ -343,14 +327,9 @@ ebin/$(PROJECT).app:: $(ERL_FILES) $(CORE_FILES) $(wildcard src/$(PROJECT).app.s
 		|| git describe --dirty --abbrev=7 --tags --always 2>/dev/null || true))
 	$(eval MODULES := $(sort $(MODULES) $(patsubst %,'%',$(notdir $(basename \
 		$(filter-out $(ERLC_EXCLUDE_PATHS),$(ERL_FILES) $(CORE_FILES) $(BEAM_FILES)))))))
-# The module list is written to a file so it is not part of the shell command.
 ifeq ($(wildcard src/$(PROJECT).app.src),)
-	$(file >ebin/$(PROJECT).modules,$(call comma_list,$(MODULES)))
-	$(app_verbose) printf '$(subst %,%%,$(subst $(newline),\n,$(subst ','\'',$(call app_file,$(GITDESCRIBE),MODULES_PLACEHOLDER))))' \
-		| awk 'BEGIN { mods = ""; while ((getline line < "ebin/$(PROJECT).modules") > 0) mods = mods line } \
-			{ gsub("MODULES_PLACEHOLDER", mods); print }' \
+	$(app_verbose) printf '$(subst %,%%,$(subst $(newline),\n,$(subst ','\'',$(call app_file,$(GITDESCRIBE),$(MODULES)))))' \
 		> ebin/$(PROJECT).app
-	$(verbose) rm -f ebin/$(PROJECT).modules
 	$(verbose) if ! $(call erlang,$(call validate_app_file)); then \
 		echo "The .app file produced is invalid. Please verify the value of PROJECT_ENV." >&2; \
 		exit 1; \
@@ -360,13 +339,10 @@ else
 		echo "Empty modules entry not found in $(PROJECT).app.src. Please consult the erlang.mk documentation for instructions." >&2; \
 		exit 1; \
 	fi
-	$(file >ebin/$(PROJECT).modules,$(call comma_list,$(MODULES)))
-	$(appsrc_verbose) awk 'BEGIN { mods = ""; while ((getline line < "ebin/$(PROJECT).modules") > 0) mods = mods line } \
-		{ gsub(/\{[[:space:]]*modules[[:space:]]*,[[:space:]]*\[\]\}/, "{modules, [" mods "]}"); print }' \
-		src/$(PROJECT).app.src \
+	$(appsrc_verbose) cat src/$(PROJECT).app.src \
+		| sed "s/{[[:space:]]*modules[[:space:]]*,[[:space:]]*\[\]}/{modules, \[$(call comma_list,$(MODULES))\]}/" \
 		| sed "s/{id,[[:space:]]*\"git\"}/{id, \"$(subst /,\/,$(GITDESCRIBE))\"}/" \
 		> ebin/$(PROJECT).app
-	$(verbose) rm -f ebin/$(PROJECT).modules
 endif
 ifneq ($(wildcard src/$(PROJECT).appup),)
 	$(verbose) cp src/$(PROJECT).appup ebin/
