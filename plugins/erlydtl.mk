@@ -12,7 +12,9 @@ DTL_OPTS ?=
 # Verbosity.
 
 dtl_verbose_0 = @echo " DTL   " $(filter %.dtl,$(?F));
+dtl_verbose_all_0 = @echo " DTL   " $(notdir $(DTL_FILES));
 dtl_verbose = $(dtl_verbose_$(V))
+dtl_verbose_all = $(dtl_verbose_all_$(V))
 
 # Core targets.
 
@@ -53,15 +55,9 @@ define erlydtl_compile.erl
 	halt().
 endef
 
-define erlydtl_compile_one
-	@echo " DTL   " $(notdir $1);
-	$(verbose) $(call erlang,$(call erlydtl_compile.erl,$(call core_native_path,$1),force_recompile),-pa ebin/)
-
-endef
-
 ebin/$(PROJECT).app:: $(DTL_FILES) $(ERLANG_MK_TMP)/last-makefile-change-erlydtl | ebin/
 	$(if $(filter $(ERLANG_MK_TMP)/last-makefile-change-erlydtl,$?),\
-		$(foreach f,$(DTL_FILES),$(call erlydtl_compile_one,$f)),\
+		$(dtl_verbose_all) $(call erlang,$(call erlydtl_compile.erl,$(call core_native_path,$(DTL_FILES)),force_recompile),-pa ebin/),\
 		$(if $(strip $(filter %.dtl,$?)),$(dtl_verbose) $(call erlang,$(call erlydtl_compile.erl,$(call core_native_path,$(filter %.dtl,$?))),-pa ebin/)))
 
 endif

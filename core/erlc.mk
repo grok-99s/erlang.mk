@@ -38,16 +38,22 @@ erlc_verbose_2 = set -x;
 erlc_verbose = $(erlc_verbose_$(V))
 
 xyrl_verbose_0 = @echo " XYRL  " $(filter %.xrl %.yrl,$(?F));
+xyrl_verbose_all_0 = @echo " XYRL  " $(notdir $(XRL_FILES) $(YRL_FILES));
 xyrl_verbose_2 = set -x;
 xyrl_verbose = $(xyrl_verbose_$(V))
+xyrl_verbose_all = $(xyrl_verbose_all_$(V))
 
 asn1_verbose_0 = @echo " ASN1  " $(filter %.asn1,$(?F));
+asn1_verbose_all_0 = @echo " ASN1  " $(notdir $(ASN1_FILES));
 asn1_verbose_2 = set -x;
 asn1_verbose = $(asn1_verbose_$(V))
+asn1_verbose_all = $(asn1_verbose_all_$(V))
 
 mib_verbose_0 = @echo " MIB   " $(filter %.bin %.mib,$(?F));
+mib_verbose_all_0 = @echo " MIB   " $(notdir $(MIB_FILES));
 mib_verbose_2 = set -x;
 mib_verbose = $(mib_verbose_$(V))
+mib_verbose_all = $(mib_verbose_all_$(V))
 
 ifneq ($(wildcard src/)$(wildcard lib/),)
 
@@ -102,24 +108,14 @@ ERL_FILES += $(addprefix src/,$(patsubst %.asn1,%.erl,$(notdir $(ASN1_FILES))))
 
 define compile_asn1
 	$(verbose) mkdir -p include/
-	$(asn1_verbose) erlc -v -I include/ -o asn1/ +noobj $(ERLC_ASN1_OPTS) $1
-	$(verbose) mv asn1/*.erl src/
-	-$(verbose) mv asn1/*.hrl include/
-	$(verbose) mv asn1/*.asn1db include/
-endef
-
-define compile_asn1_one
-	$(verbose) mkdir -p include/
-	@echo " ASN1  " $(notdir $1);
 	$(verbose) erlc -v -I include/ -o asn1/ +noobj $(ERLC_ASN1_OPTS) $1
 	$(verbose) mv asn1/*.erl src/
 	-$(verbose) mv asn1/*.hrl include/
 	$(verbose) mv asn1/*.asn1db include/
-
 endef
 
 $(PROJECT).d:: $(ASN1_FILES) $(erlc_makefile_change)
-	$(if $(filter $(erlc_makefile_change),$?),$(foreach f,$(ASN1_FILES),$(call compile_asn1_one,$f)),$(if $(strip $(filter %.asn1,$?)),$(call compile_asn1,$(filter %.asn1,$?))))
+	$(if $(filter $(erlc_makefile_change),$?),$(if $(strip $(ASN1_FILES)),$(asn1_verbose_all) $(call compile_asn1,$(ASN1_FILES))),$(if $(strip $(filter %.asn1,$?)),$(asn1_verbose) $(call compile_asn1,$(filter %.asn1,$?))))
 endif
 
 # SNMP MIB files.
@@ -127,17 +123,12 @@ endif
 ifneq ($(wildcard mibs/),)
 MIB_FILES = $(sort $(call core_find,mibs/,*.mib))
 
-define compile_mib_one
-	@echo " MIB   " $(notdir $1);
-	$(verbose) erlc -v $(ERLC_MIB_OPTS) -o priv/mibs/ -I priv/mibs/ $1
-	$(verbose) erlc -o include/ -- $(addprefix priv/mibs/,$(patsubst %.mib,%.bin,$(notdir $1)))
-
-endef
-
 $(PROJECT).d:: $(COMPILE_MIB_FIRST_PATHS) $(MIB_FILES) $(erlc_makefile_change)
 	$(verbose) mkdir -p include/ priv/mibs/
 	$(if $(filter $(erlc_makefile_change),$?),\
-		$(foreach f,$(COMPILE_MIB_FIRST_PATHS) $(filter-out $(COMPILE_MIB_FIRST_PATHS),$(MIB_FILES)),$(call compile_mib_one,$f)),\
+		$(if $(strip $(COMPILE_MIB_FIRST_PATHS) $(MIB_FILES)),\
+			$(mib_verbose_all) erlc -v $(ERLC_MIB_OPTS) -o priv/mibs/ -I priv/mibs/ $(COMPILE_MIB_FIRST_PATHS) $(filter-out $(COMPILE_MIB_FIRST_PATHS),$(MIB_FILES));\
+			$(mib_verbose_all) erlc -o include/ -- $(addprefix priv/mibs/,$(patsubst %.mib,%.bin,$(notdir $(COMPILE_MIB_FIRST_PATHS) $(filter-out $(COMPILE_MIB_FIRST_PATHS),$(MIB_FILES)))))),\
 		$(mib_verbose) erlc -v $(ERLC_MIB_OPTS) -o priv/mibs/ -I priv/mibs/ $?;\
 		$(mib_verbose) erlc -o include/ -- $(addprefix priv/mibs/,$(patsubst %.mib,%.bin,$(notdir $?))))
 endif
@@ -152,14 +143,8 @@ YRL_FILES := $(filter %.yrl,$(ALL_SRC_FILES))
 YRL_ERL_FILES = $(addprefix src/,$(patsubst %.yrl,%.erl,$(notdir $(YRL_FILES))))
 ERL_FILES += $(YRL_ERL_FILES)
 
-define compile_xyrl_one
-	@echo " XYRL  " $(notdir $1);
-	$(verbose) erlc -v -o src/ $(YRL_ERLC_OPTS) $1
-
-endef
-
 $(PROJECT).d:: $(XRL_FILES) $(YRL_FILES) $(erlc_makefile_change)
-	$(if $(filter $(erlc_makefile_change),$?),$(foreach f,$(XRL_FILES) $(YRL_FILES),$(call compile_xyrl_one,$f)),$(if $(strip $(filter %.xrl %.yrl,$?)),$(xyrl_verbose) erlc -v -o src/ $(YRL_ERLC_OPTS) $(filter %.xrl %.yrl,$?)))
+	$(if $(filter $(erlc_makefile_change),$?),$(if $(strip $(XRL_FILES) $(YRL_FILES)),$(xyrl_verbose_all) erlc -v -o src/ $(YRL_ERLC_OPTS) $(XRL_FILES) $(YRL_FILES)),$(if $(strip $(filter %.xrl %.yrl,$?)),$(xyrl_verbose) erlc -v -o src/ $(YRL_ERLC_OPTS) $(filter %.xrl %.yrl,$?)))
 
 # Erlang and Core Erlang files.
 
